@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Zen Reader — Distraction-free web novel reading</title>
+  <meta name="description" content="A mobile-first, distraction-free e-reader for web novels. Paste any chapter and read in a clean, focused Zen mode." />
+  <meta name="theme-color" content="#0e1117" />
+  
+  <!-- Google Fonts: Lora (Serif) & Geist/Inter (Sans) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            serif: ['Lora', 'Georgia', 'serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Mobile tap optimization */
+    .no-tap-highlight {
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* Smooth theme transitions */
+    .reader-surface {
+      transition: background-color 0.35s ease, color 0.35s ease;
+    }
+    
+    /* Starry background pattern */
+    .reader-starry {
+      background-image: 
+        radial-gradient(circle at 12% 18%, rgba(255,255,255,.75) 0 1px, transparent 1.5px), 
+        radial-gradient(circle at 76% 32%, rgba(159,197,255,.65) 0 1px, transparent 1.5px), 
+        radial-gradient(circle at 48% 72%, rgba(255,255,255,.6) 0 1px, transparent 1.5px), 
+        radial-gradient(circle at 88% 84%, rgba(255,255,255,.7) 0 1px, transparent 1.5px) !important;
+      background-size: 190px 220px, 260px 290px, 230px 260px, 310px 340px !important;
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(150, 150, 150, 0.3);
+      border-radius: 3px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body class="h-full font-sans antialiased selection:bg-sky-500/30">
+
+  <div id="app" class="min-h-dvh flex flex-col">
+    <!-- View container will be dynamically updated by JavaScript -->
+  </div>
+
+  <script>
+    // --- APP CONSTANTS & THEMES ---
+    const THEMES = {
+      chikari: { id: 'chikari', label: 'Chikari Dark', bg: '#0e1117', fg: '#e6edf3', muted: '#8b949e', accent: '#58a6ff', chrome: '#161b22', chromeFg: '#e6edf3', border: '#30363d', progress: '#58a6ff', swatch: '#0e1117' },
+      oled: { id: 'oled', label: 'OLED Black', bg: '#000000', fg: '#c9c9c9', muted: '#6f6f6f', accent: '#f2f2f2', chrome: '#141414', chromeFg: '#e8e8e8', border: '#2a2a2a', progress: '#e8e8e8', swatch: '#000000' },
+      sepia: { id: 'sepia', label: 'Warm Sepia', bg: '#fbf0d9', fg: '#463522', muted: '#8c7a5e', accent: '#2f2416', chrome: '#f3e6c7', chromeFg: '#463522', border: '#e1d1a9', progress: '#8a6d3b', swatch: '#fbf0d9' },
+      light: { id: 'light', label: 'Light', bg: '#ffffff', fg: '#1c1c1e', muted: '#8a8a8e', accent: '#0a0a0a', chrome: '#f6f6f7', chromeFg: '#1c1c1e', border: '#e6e6e8', progress: '#1c1c1e', swatch: '#ffffff' },
+      starry: { id: 'starry', label: 'Starry Sky', bg: '#101827', fg: '#e8edf6', muted: '#9aa8bd', accent: '#9fc5ff', chrome: '#151f31', chromeFg: '#e8edf6', border: '#2b3a52', progress: '#9fc5ff', swatch: '#101827' }
+    };
+    const THEME_ORDER = ['chikari', 'oled', 'sepia', 'light', 'starry'];
+
+    const SPACING = {
+      tight: { label: 'Tight', lineHeight: 1.45, paragraphGap: '0.9em' },
+      normal: { label: 'Normal', lineHeight: 1.75, paragraphGap: '1.25em' },
+      relaxed: { label: 'Relaxed', lineHeight: 2.1, paragraphGap: '1.6em' }
+    };
+
+    const SCROLL_SPEEDS = [
+      { id: '0.5', label: '0.5x', pxPerSecond: 22 },
+      { id: '1', label: '1x', pxPerSecond: 45 },
+      { id: '2', label: '2x', pxPerSecond: 90 }
+    ];
+
+    const FONT_MIN = 15;
+    const FONT_MAX = 32;
+
+    const SAMPLE_TEXT = `The Cartographer of Fading Stars
+
+Rain had not touched the city of Vell in three hundred days, and the astronomers had stopped counting.
+
+Mira climbed the observatory stairs two at a time, her satchel of unfinished maps slapping against her hip. At the top, the great brass telescope waited like a sleeping animal, its lens fogged with the dust of a dry season that refused to end.
+
+"You're late," said the old man without turning. He sat where he always sat, at the edge of the platform, feet dangling over a drop that would have frightened anyone else.
+
+"The gate guards wanted a toll," Mira said. "I told them the sky doesn't charge admission."
+
+He laughed at that, a dry sound like pages turning. "The sky charges everyone eventually. That's what we're here to measure."
+
+She unrolled her latest chart across the cold stone floor and weighed the corners with river stones. Constellations she had drawn from memory now looked wrong to her, as though the stars had shifted a hair's width while she slept. It was not possible. And yet the old man had taught her that "not possible" was simply the name people gave to things they had not yet learned to see.
+
+"Show me," he said.
+
+Mira pointed to the northern quarter of her map, where a single star had begun to dim. Night after night it faded, and no one but the two of them seemed to notice. "It's going out," she whispered. "A whole star, going out."
+
+The old man was quiet for a long time. When he finally spoke, his voice had lost its humor. "Then we had better finish the map," he said, "before there is nothing left to draw."`;
+
+    const STATUS_MESSAGES = ['Fetching URL…', 'Stripping ads & clutter…', 'Formatting text…'];
+
+    // --- SVG ICONS HELPERS ---
+    const SVG = {
+      BookOpen: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
+      Link2: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
+      X: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`,
+      ArrowRight: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>`,
+      Loader2: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`,
+      ShieldAlert: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+      AlertCircle: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+      PenLine: `<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></svg>`,
+      Clipboard: `<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>`,
+      Sparkles: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275Z"/></svg>`,
+      Home: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`,
+      Search: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>`,
+      Library: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>`,
+      Settings: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
+      ChevronLeft: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>`,
+      ChevronRight: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`,
+      Play: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>`,
+      Pause: `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`,
+      Gauge: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>`,
+      Minus: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>`,
+      Plus: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>`,
+      Upload: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+      WifiOff: `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 8.5a6 6 0 0 1 7 0"/><path d="M5 5a10 10 0 0 1 14 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>`
+    };
+
+    // --- INDEXEDDB STORAGE (CHAPTER CACHE) ---
+    const DB_NAME = 'zenreader-chapters';
+    const STORE_NAME = 'chapters';
+    const DB_VERSION = 1;
+
+    function openDb() {
+      if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+      return new Promise((resolve) => {
+        try {
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+              db.createObjectStore(STORE_NAME, { keyPath: 'url' });
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        } catch {
+          resolve(null);
+        }
+      });
+    }
+
+    async function saveChapter(chapter) {
+      const db = await openDb();
+      if (!db) return;
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).put(chapter);
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = () => { db.close(); resolve(); };
+        } catch {
+          db.close();
+          resolve();
+        }
+      });
+    }
+
+    async function getChapter(url) {
+      const db = await openDb();
+      if (!db) return null;
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const req = tx.objectStore(STORE_NAME).get(url);
+          req.onsuccess = () => { db.close(); resolve(req.result || null); };
+          req.onerror = () => { db.close(); resolve(null); };
+        } catch {
+          db.close();
+          resolve(null);
+        }
+      });
+    }
+
+    // --- APPLICATION STATE ---
+    const state = {
+      settings: {
+        theme: 'chikari',
+        fontSize: 20,
+        spacing: 'normal',
+        scrollSpeed: '1',
+        customBackground: null,
+        customOverlay: 55,
+      },
+      text: '',
+      urlValue: '',
+      isReading: false,
+      chapter: null,
+      initialScroll: 0,
+      extractState: 'idle', // idle | loading | blocked | error
+      extractMessage: '',
+      statusIndex: 0,
+      sourceLabel: null,
+      chromeVisible: true,
+      autoScroll: false,
+      settingsOpen: false,
+      progress: 0,
+      navDirection: null,
+      navError: null,
+    };
+
+    // Auto-scroll loop reference
+    let rafAutoScroll = null;
+    let statusTimer = null;
+
+    // --- HELPER FUNCTIONS ---
+    function processText(raw) {
+      if (!raw) return { title: null, paragraphs: [], wordCount: 0 };
+      const normalized = raw
+        .replace(/\r\n?/g, '\n')
+        .replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+      if (!normalized) return { title: null, paragraphs: [], wordCount: 0 };
+
+      const hasBlankLines = /\n\s*\n/.test(normalized);
+      const chunks = hasBlankLines ? normalized.split(/\n\s*\n/) : normalized.split(/\n/);
+      let paragraphs = chunks.map((c) => c.replace(/\n/g, ' ').trim()).filter(Boolean);
+
+      let title = null;
+      const first = paragraphs[0];
+      if (first && first.length <= 80 && !/[.!?…]$/.test(first) && paragraphs.length > 1) {
+        title = first;
+        paragraphs = paragraphs.slice(1);
+      }
+
+      const wordCount = paragraphs.reduce((sum, p) => sum + p.split(/\s+/).filter(Boolean).length, 0);
+      return { title, paragraphs, wordCount };
+    }
+
+    function buildChapterText(title, paragraphs) {
+      const body = paragraphs.join('\n\n');
+      return title ? `${title}\n\n${body}` : body;
+    }
+
+    // Client-side extraction engine using CORS proxy fallback
+    async function extractChapter(url) {
+      const NEXT_PATTERN = /(next\s*chapter|next\s*episode|next\s*part|^next$|»|›|→)/i;
+      const PREV_PATTERN = /(prev(ious)?\s*chapter|prev(ious)?\s*episode|prev(ious)?\s*part|^prev(ious)?$|«|‹|←)/i;
+
+      function findChapterLink(doc, baseUrl, pattern) {
+        const anchors = Array.from(doc.querySelectorAll('a[href]'));
+        for (const a of anchors) {
+          const text = (a.textContent || '').trim();
+          const rel = a.getAttribute('rel') || '';
+          const aria = a.getAttribute('aria-label') || '';
+          if (!pattern.test(text) && !pattern.test(rel) && !pattern.test(aria)) continue;
+          const href = a.getAttribute('href');
+          if (!href) continue;
+          try {
+            const resolved = new URL(href, baseUrl);
+            if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') continue;
+            return resolved.toString();
+          } catch {
+            continue;
+          }
+        }
+        return null;
+      }
+
+      try {
+        // Try direct fetch or cors proxy fallback
+        let responseHtml = '';
+        let finalUrl = url;
+
+        try {
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+          const res = await fetch(proxyUrl);
+          if (res.ok) {
+            responseHtml = await res.text();
+          }
+        } catch {
+          /* fail fallback handled below */
+        }
+
+        if (!responseHtml) {
+          return { ok: false, blocked: true, message: 'Site protection detected or CORS restricted. Copy text manually to bypass.' };
+        }
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(responseHtml, 'text/html');
+        
+        // Remove unwanted tags
+        const badElements = doc.querySelectorAll('script, style, iframe, nav, header, footer, noscript, .ad, .ads, .advertisement');
+        badElements.forEach((el) => el.remove());
+
+        const nextUrl = findChapterLink(doc, url, NEXT_PATTERN);
+        const prevUrl = findChapterLink(doc, url, PREV_PATTERN);
+        const pageTitle = doc.title || '';
+
+        // Extract paragraphs from main text container or all p tags
+        let paragraphs = Array.from(doc.querySelectorAll('p'))
+          .map((p) => (p.textContent || '').trim())
+          .filter((t) => t.length > 15);
+
+        if (paragraphs.length === 0) {
+          const bodyText = doc.body ? doc.body.textContent || '' : '';
+          const proc = processText(bodyText);
+          paragraphs = proc.paragraphs;
+        }
+
+        if (paragraphs.length === 0) {
+          return { ok: false, blocked: false, message: 'Could not find readable chapter content on that page.' };
+        }
+
+        const extractedText = paragraphs.join('\n\n');
+        const processed = processText(extractedText);
+        const title = (processed.title || pageTitle || null);
+
+        return {
+          ok: true,
+          title,
+          paragraphs: processed.paragraphs,
+          wordCount: processed.wordCount,
+          prevUrl: prevUrl && prevUrl !== url ? prevUrl : null,
+          nextUrl: nextUrl && nextUrl !== url ? nextUrl : null,
+          sourceUrl: url,
+        };
+      } catch (err) {
+        return { ok: false, blocked: false, message: 'Could not reach or parse that URL.' };
+      }
+    }
+
+    // --- PERSISTENCE ---
+    function saveState() {
+      try {
+        localStorage.setItem('zenreader:settings', JSON.stringify(state.settings));
+        localStorage.setItem('zenreader:text', state.text);
+        localStorage.setItem('zenreader:reading', state.isReading ? '1' : '0');
+        if (state.chapter) {
+          localStorage.setItem('zenreader:chapter', JSON.stringify(state.chapter));
+        } else {
+          localStorage.setItem('zenreader:chapter', '');
+        }
+      } catch (e) {
+        /* storage full / blocked */
+      }
+    }
+
+    function loadState() {
+      try {
+        const storedSettings = localStorage.getItem('zenreader:settings');
+        if (storedSettings) {
+          const parsed = JSON.parse(storedSettings);
+          state.settings = { ...state.settings, ...parsed };
+        }
+        const storedText = localStorage.getItem('zenreader:text');
+        if (storedText) state.text = storedText;
+
+        const storedChapter = localStorage.getItem('zenreader:chapter');
+        if (storedChapter) {
+          try { state.chapter = JSON.parse(storedChapter); } catch {}
+        }
+
+        const storedScroll = localStorage.getItem('zenreader:scroll');
+        if (storedScroll) state.initialScroll = Number(storedScroll) || 0;
+
+        if (localStorage.getItem('zenreader:reading') === '1' && state.text.trim()) {
+          state.isReading = true;
+        }
+      } catch (e) {}
+    }
+
+    // --- AUTO SCROLL ENGINE ---
+    function startAutoScroll() {
+      if (rafAutoScroll) cancelAnimationFrame(rafAutoScroll);
+      let last = performance.now();
+      let remainder = 0;
+
+      const step = (now) => {
+        if (!state.autoScroll) return;
+        const speedObj = SCROLL_SPEEDS.find((s) => s.id === state.settings.scrollSpeed) || SCROLL_SPEEDS[1];
+        const dt = (now - last) / 1000;
+        last = now;
+        remainder += speedObj.pxPerSecond * dt;
+        const whole = Math.floor(remainder);
+        if (whole >= 1) {
+          window.scrollBy(0, whole);
+          remainder -= whole;
+        }
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        if (window.scrollY >= max - 1) {
+          state.autoScroll = false;
+          render();
+          return;
+        }
+        rafAutoScroll = requestAnimationFrame(step);
+      };
+      rafAutoScroll = requestAnimationFrame(step);
+    }
+
+    function stopAutoScroll() {
+      if (rafAutoScroll) cancelAnimationFrame(rafAutoScroll);
+      rafAutoScroll = null;
+    }
+
+    // --- MAIN RENDER ENGINE ---
+    function render() {
+      const app = document.getElementById('app');
+      const theme = THEMES[state.settings.theme] || THEMES.chikari;
+
+      // Update document root background & meta tag theme-color
+      document.documentElement.style.backgroundColor = theme.bg;
+      document.body.style.backgroundColor = theme.bg;
+      let metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) metaTheme.setAttribute('content', theme.bg);
+
+      if (state.isReading) {
+        app.innerHTML = renderReaderScreen(theme);
+        bindReaderEvents(theme);
+      } else {
+        app.innerHTML = renderInputScreen(theme);
+        bindInputEvents(theme);
+      }
+
+      if (state.settingsOpen) {
+        const drawerOverlay = document.createElement('div');
+        drawerOverlay.id = 'drawer-container';
+        drawerOverlay.innerHTML = renderSettingsDrawer(theme);
+        app.appendChild(drawerOverlay);
+        bindSettingsDrawerEvents(theme);
+      }
+    }
+
+    // --- INPUT SCREEN TEMPLATE & BINDINGS ---
+    function renderInputScreen(theme) {
+      const preview = processText(state.text);
+      const canRead = preview.paragraphs.length > 0;
+      const minutes = Math.max(1, Math.round(preview.wordCount / 220));
+
+      return `
+        <main class="reader-surface no-tap-highlight min-h-dvh px-5 pb-28 pt-[max(env(safe-area-inset-top),2rem)]" style="background-color: ${theme.bg}; color: ${theme.fg};">
+          <div class="mx-auto flex w-full max-w-xl flex-col">
+            <header class="mb-6 flex items-center gap-3">
+              <div class="flex size-10 items-center justify-center rounded-xl" style="background-color: ${theme.chrome}; color: ${theme.accent};">
+                ${SVG.BookOpen}
+              </div>
+              <div>
+                <h1 class="font-serif text-xl font-semibold leading-none" style="color: ${theme.accent};">Zen Reader</h1>
+                <p class="mt-1 text-sm" style="color: ${theme.muted};">Paste a chapter. Read without the noise.</p>
+              </div>
+            </header>
+
+            <!-- URL Extractor Section -->
+            <section aria-labelledby="url-extractor-label">
+              <label id="url-extractor-label" for="chapter-url" class="mb-2 block text-sm font-medium" style="color: ${theme.muted};">
+                Paste Novel Chapter URL
+              </label>
+              <div class="flex items-center gap-2 rounded-2xl border pl-4 pr-2" style="background-color: ${theme.chrome}; border-color: ${theme.border};">
+                <span style="color: ${theme.muted};">${SVG.Link2}</span>
+                <input
+                  id="chapter-url"
+                  type="url"
+                  value="${state.urlValue}"
+                  placeholder="https://your-favorite-novel-site.com/chapter-1"
+                  class="h-12 w-full bg-transparent text-sm outline-none placeholder:opacity-50"
+                  style="color: ${theme.fg};"
+                  ${state.extractState === 'loading' ? 'disabled' : ''}
+                />
+                ${state.urlValue.length > 0 ? `
+                  <button type="button" id="btn-clear-url" class="flex size-8 shrink-0 items-center justify-center rounded-full active:opacity-70" style="color: ${theme.muted};">
+                    ${SVG.X}
+                  </button>
+                ` : ''}
+              </div>
+
+              <button
+                type="button"
+                id="btn-extract"
+                ${!state.urlValue.trim() || state.extractState === 'loading' ? 'disabled' : ''}
+                class="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-sm font-semibold transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                style="background-color: ${theme.accent}; color: ${theme.bg};"
+              >
+                ${state.extractState === 'loading' ? `
+                  ${SVG.Loader2} ${STATUS_MESSAGES[state.statusIndex]}
+                ` : `
+                  Extract & Read ${SVG.ArrowRight}
+                `}
+              </button>
+
+              ${state.extractState === 'blocked' ? `
+                <div class="mt-3 flex items-start gap-3 rounded-2xl border p-3 text-sm" style="border-color: ${theme.border}; background-color: ${theme.chrome};" role="alert">
+                  <span class="mt-0.5 shrink-0" style="color: ${theme.accent};">${SVG.ShieldAlert}</span>
+                  <div class="flex-1">
+                    <p style="color: ${theme.fg};">${state.extractMessage}</p>
+                    <button type="button" id="btn-switch-manual" class="mt-2 flex items-center gap-1.5 text-xs font-semibold underline underline-offset-2" style="color: ${theme.accent};">
+                      ${SVG.PenLine} Switch to Manual Paste
+                    </button>
+                  </div>
+                </div>
+              ` : ''}
+
+              ${state.extractState === 'error' ? `
+                <div class="mt-3 flex items-start gap-3 rounded-2xl border p-3 text-sm" style="border-color: ${theme.border}; background-color: ${theme.chrome};" role="alert">
+                  <span class="mt-0.5 shrink-0" style="color: ${theme.muted};">${SVG.AlertCircle}</span>
+                  <p style="color: ${theme.fg};">${state.extractMessage}</p>
+                </div>
+              ` : ''}
+            </section>
+
+            <div class="my-6 flex items-center gap-3 text-xs" style="color: ${theme.muted};">
+              <span class="h-px flex-1" style="background-color: ${theme.border};"></span>
+              OR PASTE MANUALLY
+              <span class="h-px flex-1" style="background-color: ${theme.border};"></span>
+            </div>
+
+            <label for="chapter-text" class="mb-2 text-sm font-medium" style="color: ${theme.muted};">Chapter text</label>
+
+            ${state.sourceLabel ? `
+              <div class="mb-2 flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs" style="border-color: ${theme.border}; color: ${theme.muted};">
+                ${SVG.Link2}
+                <span class="truncate">Source: ${state.sourceLabel}</span>
+                <button type="button" id="btn-remove-source" class="ml-auto shrink-0 active:opacity-70">${SVG.X}</button>
+              </div>
+            ` : ''}
+
+            <div class="relative">
+              <textarea
+                id="chapter-text"
+                placeholder="Paste raw copied text or a chapter draft here…"
+                spellcheck="false"
+                class="min-h-[44dvh] w-full resize-none rounded-2xl border p-4 font-serif text-base leading-relaxed outline-none transition-colors placeholder:opacity-60 focus:ring-2"
+                style="background-color: ${theme.chrome}; color: ${theme.fg}; border-color: ${theme.border}; caret-color: ${theme.accent};"
+              >${state.text}</textarea>
+
+              ${state.text.length === 0 ? `
+                <button type="button" id="btn-paste-clipboard" class="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-transform active:scale-95" style="border-color: ${theme.border}; color: ${theme.muted};">
+                  ${SVG.Clipboard} Paste
+                </button>
+              ` : ''}
+            </div>
+
+            <div class="mt-3 flex items-center justify-between text-xs" style="color: ${theme.muted};">
+              <span>
+                ${canRead ? `${preview.paragraphs.length} paragraphs · ${preview.wordCount.toLocaleString()} words · ~${minutes} min` : 'Waiting for text…'}
+              </span>
+              ${state.text.length > 0 ? `
+                <button type="button" id="btn-clear-text" class="underline underline-offset-2 active:opacity-70">Clear</button>
+              ` : ''}
+            </div>
+
+            <button
+              type="button"
+              id="btn-start-reading"
+              ${!canRead ? 'disabled' : ''}
+              class="mt-5 flex h-14 items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+              style="background-color: ${theme.accent}; color: ${theme.bg};"
+            >
+              Start Reading ${SVG.ArrowRight}
+            </button>
+
+            <button
+              type="button"
+              id="btn-sample"
+              class="mt-3 flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition-transform active:scale-[0.98]"
+              style="border-color: ${theme.border}; color: ${theme.muted};"
+            >
+              ${SVG.Sparkles} Load a sample chapter
+            </button>
+          </div>
+
+          <!-- Primary Navigation Bar -->
+          <nav class="fixed inset-x-4 z-30 mx-auto flex max-w-xl items-center justify-around rounded-2xl border p-2 shadow-2xl backdrop-blur-xl" style="bottom: max(env(safe-area-inset-bottom), 1rem); background-color: ${theme.chrome}ee; border-color: ${theme.border};">
+            <button type="button" class="flex flex-col items-center gap-1 rounded-xl px-4 py-2 text-[10px]" style="color: ${theme.accent};">
+              ${SVG.Home} Home
+            </button>
+            <button type="button" class="flex flex-col items-center gap-1 rounded-xl px-4 py-2 text-[10px]" style="color: ${theme.muted};">
+              ${SVG.Search} Search
+            </button>
+            <button type="button" class="flex flex-col items-center gap-1 rounded-xl px-4 py-2 text-[10px]" style="color: ${theme.muted};">
+              ${SVG.Library} Library
+            </button>
+            <button type="button" id="btn-open-settings" class="flex flex-col items-center gap-1 rounded-xl px-4 py-2 text-[10px]" style="color: ${theme.muted};">
+              ${SVG.Settings} Settings
+            </button>
+          </nav>
+        </main>
+      `;
+    }
+
+    function bindInputEvents(theme) {
+      const urlInput = document.getElementById('chapter-url');
+      if (urlInput) {
+        urlInput.addEventListener('input', (e) => {
+          state.urlValue = e.target.value;
+        });
+        urlInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') handleExtract();
+        });
+      }
+
+      const btnClearUrl = document.getElementById('btn-clear-url');
+      if (btnClearUrl) {
+        btnClearUrl.addEventListener('click', () => {
+          state.urlValue = '';
+          state.extractState = 'idle';
+          state.extractMessage = '';
+          render();
+        });
+      }
+
+      const btnExtract = document.getElementById('btn-extract');
+      if (btnExtract) {
+        btnExtract.addEventListener('click', handleExtract);
+      }
+
+      const btnSwitchManual = document.getElementById('btn-switch-manual');
+      if (btnSwitchManual) {
+        btnSwitchManual.addEventListener('click', () => {
+          state.sourceLabel = state.urlValue.trim();
+          state.extractState = 'idle';
+          state.extractMessage = '';
+          render();
+          const textarea = document.getElementById('chapter-text');
+          if (textarea) textarea.focus();
+        });
+      }
+
+      const textarea = document.getElementById('chapter-text');
+      if (textarea) {
+        textarea.addEventListener('input', (e) => {
+          state.text = e.target.value;
+          saveState();
+          // Update character count live
+          const preview = processText(state.text);
+          const canRead = preview.paragraphs.length > 0;
+          const btnStart = document.getElementById('btn-start-reading');
+          if (btnStart) btnStart.disabled = !canRead;
+        });
+      }
+
+      const btnPaste = document.getElementById('btn-paste-clipboard');
+      if (btnPaste) {
+        btnPaste.addEventListener('click', async () => {
+          try {
+            const clip = await navigator.clipboard.readText();
+            if (clip) {
+              state.text = clip;
+              saveState();
+              render();
+            }
+          } catch {}
+        });
+      }
+
+      const btnClearText = document.getElementById('btn-clear-text');
+      if (btnClearText) {
+        btnClearText.addEventListener('click', () => {
+          state.text = '';
+          saveState();
+          render();
+        });
+      }
+
+      const btnStart = document.getElementById('btn-start-reading');
+      if (btnStart) {
+        btnStart.addEventListener('click', () => {
+          const preview = processText(state.text);
+          if (preview.paragraphs.length === 0) return;
+          state.isReading = true;
+          state.initialScroll = 0;
+          saveState();
+          render();
+          window.scrollTo(0, 0);
+        });
+      }
+
+      const btnSample = document.getElementById('btn-sample');
+      if (btnSample) {
+        btnSample.addEventListener('click', () => {
+          state.text = SAMPLE_TEXT;
+          saveState();
+          render();
+        });
+      }
+
+      const btnRemoveSource = document.getElementById('btn-remove-source');
+      if (btnRemoveSource) {
+        btnRemoveSource.addEventListener('click', () => {
+          state.sourceLabel = null;
+          render();
+        });
+      }
+
+      const btnSettings = document.getElementById('btn-open-settings');
+      if (btnSettings) {
+        btnSettings.addEventListener('click', () => {
+          state.settingsOpen = true;
+          render();
+        });
+      }
+    }
+
+    async function handleExtract() {
+      const url = state.urlValue.trim();
+      if (!url || state.extractState === 'loading') return;
+
+      state.extractState = 'loading';
+      state.statusIndex = 0;
+      state.extractMessage = '';
+      render();
+
+      statusTimer = setInterval(() => {
+        state.statusIndex = Math.min(state.statusIndex + 1, STATUS_MESSAGES.length - 1);
+        render();
+      }, 900);
+
+      const result = await extractChapter(url);
+
+      if (statusTimer) clearInterval(statusTimer);
+
+      if (result.ok) {
+        const chapterText = buildChapterText(result.title, result.paragraphs);
+        state.text = chapterText;
+        state.chapter = { sourceUrl: result.sourceUrl, prevUrl: result.prevUrl, nextUrl: result.nextUrl };
+        state.extractState = 'idle';
+        state.isReading = true;
+        state.initialScroll = 0;
+        await saveChapter({
+          url: result.sourceUrl,
+          title: result.title,
+          text: chapterText,
+          prevUrl: result.prevUrl,
+          nextUrl: result.nextUrl,
+          savedAt: Date.now(),
+        });
+        saveState();
+        render();
+        window.scrollTo(0, 0);
+        return;
+      }
+
+      state.extractState = result.blocked ? 'blocked' : 'error';
+      state.extractMessage = result.message;
+      render();
+    }
+
+    // --- READER SCREEN TEMPLATE & BINDINGS ---
+    function renderReaderScreen(theme) {
+      const spacing = SPACING[state.settings.spacing] || SPACING.normal;
+      const processed = processText(state.text);
+      const isStarry = state.settings.theme === 'starry';
+      const customBg = state.settings.customBackground;
+      const overlay = state.settings.customOverlay;
+
+      const currentSpeed = SCROLL_SPEEDS.find((s) => s.id === state.settings.scrollSpeed) || SCROLL_SPEEDS[1];
+      const pct = Math.round(state.progress * 100);
+
+      const styleBg = customBg 
+        ? `background-image: linear-gradient(rgba(0, 0, 0, ${overlay / 100}), rgba(0, 0, 0, ${overlay / 100})), url("${customBg}"); background-attachment: fixed; background-size: cover; background-position: center;`
+        : '';
+
+      return `
+        <div class="reader-surface no-tap-highlight min-h-dvh ${isStarry ? 'reader-starry' : ''}" style="background-color: ${theme.bg}; color: ${theme.fg}; ${styleBg}">
+          
+          <!-- Top Fixed Progress Bar -->
+          <div class="fixed inset-x-0 top-0 z-30 h-1" style="background-color: ${theme.border};" role="progressbar">
+            <div id="progress-bar-fill" class="h-full origin-left" style="background-color: ${theme.progress}; transform: scaleX(${state.progress}); transition: ${state.autoScroll ? 'none' : 'transform 0.1s linear'};"></div>
+          </div>
+
+          <!-- Top Chrome Bar -->
+          <div class="fixed inset-x-0 top-0 z-20 transition-all duration-300" style="transform: ${state.chromeVisible ? 'translateY(0)' : 'translateY(-100%)'}; opacity: ${state.chromeVisible ? 1 : 0}; pointer-events: ${state.chromeVisible ? 'auto' : 'none'};">
+            <div class="flex items-center justify-between border-b px-3 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)]" style="background-color: ${theme.chrome}; border-color: ${theme.border}; color: ${theme.chromeFg};">
+              <button type="button" id="btn-reader-exit" class="flex items-center gap-1 rounded-full px-2 py-1.5 text-sm font-medium transition-transform active:scale-95">
+                ${SVG.ChevronLeft} Library
+              </button>
+              <div class="flex items-center gap-2">
+                <span class="text-sm tabular-nums" style="color: ${theme.muted};">${pct}%</span>
+                <button type="button" id="btn-reader-settings" aria-label="Open settings" class="flex size-9 items-center justify-center rounded-full border" style="border-color: ${theme.border};">
+                  ${SVG.Settings}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Article Content Surface -->
+          <article id="reading-content" class="mx-auto w-full max-w-2xl cursor-pointer px-6 pb-[45dvh] pt-[max(env(safe-area-inset-top),3.5rem)]" style="font-family: var(--font-serif); font-size: ${state.settings.fontSize}px; line-height: ${spacing.lineHeight};">
+            ${processed.title ? `
+              <h1 class="mb-8 text-balance font-semibold" style="color: ${theme.accent}; font-size: 1.4em; line-height: 1.25;">${processed.title}</h1>
+            ` : ''}
+
+            ${processed.paragraphs.map((p) => `
+              <p style="margin-bottom: ${spacing.paragraphGap};" class="text-pretty">${p}</p>
+            `).join('')}
+
+            ${processed.paragraphs.length === 0 ? `
+              <p style="color: ${theme.muted};">No text to read. Go back and paste a chapter.</p>
+            ` : ''}
+
+            ${state.chapter && (state.chapter.prevUrl || state.chapter.nextUrl) ? `
+              <nav aria-label="Chapter navigation" class="mt-10 flex items-center gap-3 border-t pt-6" style="border-color: ${theme.border}; font-family: var(--font-sans);">
+                <button type="button" id="btn-prev-chapter" ${!state.chapter.prevUrl || state.navDirection !== null ? 'disabled' : ''} class="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-30" style="border-color: ${theme.border}; color: ${theme.chromeFg};">
+                  ${state.navDirection === 'prev' ? SVG.Loader2 : SVG.ChevronLeft}
+                  ${state.chapter.prevUrl ? 'Previous Chapter' : 'No previous chapter'}
+                </button>
+                <button type="button" id="btn-next-chapter" ${!state.chapter.nextUrl || state.navDirection !== null ? 'disabled' : ''} class="flex h-12 flex-1 flex-row-reverse items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-30" style="border-color: ${theme.border}; color: ${theme.chromeFg};">
+                  ${state.navDirection === 'next' ? SVG.Loader2 : SVG.ChevronRight}
+                  ${state.chapter.nextUrl ? 'Next Chapter' : 'No next chapter'}
+                </button>
+              </nav>
+            ` : ''}
+          </article>
+
+          <!-- Navigation Notification Error Banner -->
+          ${state.navError ? `
+            <div role="alert" class="fixed inset-x-4 top-16 z-40 mx-auto flex max-w-md items-start gap-2 rounded-2xl border p-3 text-sm shadow-2xl" style="background-color: ${theme.chrome}; color: ${theme.chromeFg}; border-color: ${theme.border};">
+              <span class="mt-0.5 shrink-0">${SVG.WifiOff}</span>
+              <p class="flex-1">${state.navError}</p>
+              <button type="button" id="btn-dismiss-nav-error" class="shrink-0 text-xs underline opacity-70">Dismiss</button>
+            </div>
+          ` : ''}
+
+          <!-- Bottom Controls Drawer/Bar -->
+          <div class="fixed inset-x-0 bottom-0 z-20 transition-all duration-300" style="transform: ${state.chromeVisible ? 'translateY(0)' : 'translateY(120%)'}; opacity: ${state.chromeVisible ? 1 : 0}; pointer-events: ${state.chromeVisible ? 'auto' : 'none'};">
+            <div class="mx-auto flex max-w-2xl flex-col gap-4 border-t px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-4" style="background-color: ${theme.chrome}; border-color: ${theme.border}; color: ${theme.chromeFg};">
+              
+              <!-- Themes -->
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-xs font-medium uppercase tracking-wide opacity-60">Theme</span>
+                <div class="flex gap-2">
+                  ${THEME_ORDER.map((id) => {
+                    const t = THEMES[id];
+                    const active = state.settings.theme === id;
+                    return `
+                      <button type="button" data-theme-id="${id}" class="btn-theme-select flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-xs font-medium transition-transform active:scale-95" style="border-color: ${active ? theme.chromeFg : theme.border}; background-color: ${active ? theme.chromeFg : 'transparent'}; color: ${active ? theme.chrome : theme.chromeFg};">
+                        <span class="size-4 rounded-full border" style="background-color: ${t.swatch}; border-color: ${theme.border};"></span>
+                        ${t.label}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+
+              <!-- Text Size -->
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-xs font-medium uppercase tracking-wide opacity-60">Text size</span>
+                <div class="flex items-center gap-1 rounded-full border p-1" style="border-color: ${theme.border};">
+                  <button type="button" id="btn-font-dec" ${state.settings.fontSize <= FONT_MIN ? 'disabled' : ''} class="flex size-9 items-center justify-center rounded-full transition-transform active:scale-90 disabled:opacity-30">
+                    ${SVG.Minus} <span class="text-xs font-semibold">A</span>
+                  </button>
+                  <span class="w-8 text-center text-xs tabular-nums" style="color: ${theme.muted};">${state.settings.fontSize}</span>
+                  <button type="button" id="btn-font-inc" ${state.settings.fontSize >= FONT_MAX ? 'disabled' : ''} class="flex size-9 items-center justify-center rounded-full transition-transform active:scale-90 disabled:opacity-30">
+                    <span class="text-sm font-semibold">A</span> ${SVG.Plus}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Line Spacing -->
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-xs font-medium uppercase tracking-wide opacity-60">Line spacing</span>
+                <div class="flex items-center gap-1 rounded-full border p-1" style="border-color: ${theme.border};">
+                  ${['tight', 'normal', 'relaxed'].map((sId) => {
+                    const active = state.settings.spacing === sId;
+                    return `
+                      <button type="button" data-spacing-id="${sId}" class="btn-spacing-select rounded-full px-3 py-1.5 text-xs font-medium transition-transform active:scale-95" style="background-color: ${active ? theme.chromeFg : 'transparent'}; color: ${active ? theme.chrome : theme.chromeFg};">
+                        ${SPACING[sId].label}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+
+              <!-- Auto-scroll Speed -->
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-xs font-medium uppercase tracking-wide opacity-60">Auto-scroll speed</span>
+                <div class="flex items-center gap-1 rounded-full border p-1" style="border-color: ${theme.border};">
+                  ${SCROLL_SPEEDS.map((sObj) => {
+                    const active = state.settings.scrollSpeed === sObj.id;
+                    return `
+                      <button type="button" data-speed-id="${sObj.id}" class="btn-speed-select rounded-full px-3 py-1.5 text-xs font-medium transition-transform active:scale-95" style="background-color: ${active ? theme.chromeFg : 'transparent'}; color: ${active ? theme.chrome : theme.chromeFg};">
+                        ${sObj.label}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Floating Auto-scroll Action Button -->
+          <button type="button" id="btn-toggle-autoscroll" class="fixed bottom-[max(env(safe-area-inset-bottom),1.25rem)] right-4 z-30 flex items-center gap-2 rounded-full px-4 shadow-lg active:scale-95" style="height: 3.25rem; background-color: ${state.autoScroll ? theme.progress : theme.chrome}; color: ${state.autoScroll ? theme.bg : theme.chromeFg}; border: 1px solid ${theme.border}; transform: ${state.chromeVisible ? 'translateY(-4rem)' : 'translateY(0)'}; transition: transform 0.3s ease, background-color 0.2s ease;">
+            ${state.autoScroll ? SVG.Pause : SVG.Play}
+            <span class="flex items-center gap-1 text-sm font-semibold">
+              ${SVG.Gauge} ${currentSpeed.label}
+            </span>
+          </button>
+
+        </div>
+      `;
+    }
+
+    function bindReaderEvents(theme) {
+      // Toggle Chrome visibility on content click
+      const article = document.getElementById('reading-content');
+      if (article) {
+        article.addEventListener('click', (e) => {
+          // Ignore clicks on chapter navigation buttons inside article
+          if (e.target.closest('#btn-prev-chapter') || e.target.closest('#btn-next-chapter')) return;
+          state.chromeVisible = !state.chromeVisible;
+          render();
+        });
+      }
+
+      const btnExit = document.getElementById('btn-reader-exit');
+      if (btnExit) {
+        btnExit.addEventListener('click', () => {
+          state.autoScroll = false;
+          stopAutoScroll();
+          state.isReading = false;
+          saveState();
+          render();
+        });
+      }
+
+      const btnSettings = document.getElementById('btn-reader-settings');
+      if (btnSettings) {
+        btnSettings.addEventListener('click', () => {
+          state.settingsOpen = true;
+          render();
+        });
+      }
+
+      const btnToggleAuto = document.getElementById('btn-toggle-autoscroll');
+      if (btnToggleAuto) {
+        btnToggleAuto.addEventListener('click', () => {
+          state.autoScroll = !state.autoScroll;
+          if (state.autoScroll) {
+            state.chromeVisible = false;
+            startAutoScroll();
+          } else {
+            stopAutoScroll();
+          }
+          render();
+        });
+      }
+
+      // Font size buttons
+      const btnDec = document.getElementById('btn-font-dec');
+      if (btnDec) {
+        btnDec.addEventListener('click', () => {
+          state.settings.fontSize = Math.max(FONT_MIN, state.settings.fontSize - 1);
+          saveState();
+          render();
+        });
+      }
+      const btnInc = document.getElementById('btn-font-inc');
+      if (btnInc) {
+        btnInc.addEventListener('click', () => {
+          state.settings.fontSize = Math.min(FONT_MAX, state.settings.fontSize + 1);
+          saveState();
+          render();
+        });
+      }
+
+      // Theme options
+      document.querySelectorAll('.btn-theme-select').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          const tid = e.currentTarget.getAttribute('data-theme-id');
+          state.settings.theme = tid;
+          saveState();
+          render();
+        });
+      });
+
+      // Spacing options
+      document.querySelectorAll('.btn-spacing-select').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          const spId = e.currentTarget.getAttribute('data-spacing-id');
+          state.settings.spacing = spId;
+          saveState();
+          render();
+        });
+      });
+
+      // Speed options
+      document.querySelectorAll('.btn-speed-select').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          const spdId = e.currentTarget.getAttribute('data-speed-id');
+          state.settings.scrollSpeed = spdId;
+          saveState();
+          render();
+        });
+      });
+
+      // Chapter Next/Prev buttons
+      const btnPrev = document.getElementById('btn-prev-chapter');
+      if (btnPrev) {
+        btnPrev.addEventListener('click', () => handleChapterNavigation('prev'));
+      }
+      const btnNext = document.getElementById('btn-next-chapter');
+      if (btnNext) {
+        btnNext.addEventListener('click', () => handleChapterNavigation('next'));
+      }
+
+      const btnDismissError = document.getElementById('btn-dismiss-nav-error');
+      if (btnDismissError) {
+        btnDismissError.addEventListener('click', () => {
+          state.navError = null;
+          render();
+        });
+      }
+    }
+
+    async function handleChapterNavigation(dir) {
+      if (!state.chapter) return;
+      const targetUrl = dir === 'prev' ? state.chapter.prevUrl : state.chapter.nextUrl;
+      if (!targetUrl) return;
+
+      state.navDirection = dir;
+      state.navError = null;
+      render();
+
+      try {
+        const cached = await getChapter(targetUrl);
+        if (cached) {
+          state.text = cached.text;
+          state.chapter = { sourceUrl: cached.url, prevUrl: cached.prevUrl, nextUrl: cached.nextUrl };
+          saveState();
+          window.scrollTo(0, 0);
+          return;
+        }
+
+        const result = await extractChapter(targetUrl);
+        if (!result.ok) {
+          state.navError = result.blocked ? 'Site protection detected. Copy text manually to bypass.' : result.message;
+          return;
+        }
+
+        const chapterText = buildChapterText(result.title, result.paragraphs);
+        state.text = chapterText;
+        state.chapter = { sourceUrl: result.sourceUrl, prevUrl: result.prevUrl, nextUrl: result.nextUrl };
+
+        await saveChapter({
+          url: result.sourceUrl,
+          title: result.title,
+          text: chapterText,
+          prevUrl: result.prevUrl,
+          nextUrl: result.nextUrl,
+          savedAt: Date.now(),
+        });
+        saveState();
+        window.scrollTo(0, 0);
+      } finally {
+        state.navDirection = null;
+        render();
+      }
+    }
+
+    // --- SETTINGS DRAWER TEMPLATE & BINDINGS ---
+    function renderSettingsDrawer(theme) {
+      return `
+        <div class="fixed inset-0 z-40" role="dialog" aria-modal="true">
+          <button type="button" id="btn-close-drawer-backdrop" class="absolute inset-0 bg-black/50"></button>
+          <aside class="absolute right-0 top-0 flex h-full w-[min(88vw,23rem)] flex-col gap-6 overflow-y-auto border-l p-5 pt-[max(env(safe-area-inset-top),1.25rem)] shadow-2xl" style="background-color: ${theme.chrome}; color: ${theme.chromeFg}; border-color: ${theme.border};">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[.18em] opacity-60">Reader</p>
+                <h2 class="mt-1 font-serif text-2xl font-semibold">Settings</h2>
+              </div>
+              <button type="button" id="btn-close-drawer-x" aria-label="Close settings" class="flex size-9 items-center justify-center rounded-full border" style="border-color: ${theme.border};">
+                ${SVG.X}
+              </button>
+            </div>
+
+            <!-- Theme Picker -->
+            <section>
+              <p class="mb-3 text-xs font-semibold uppercase tracking-widest opacity-60">Theme</p>
+              <div class="grid grid-cols-2 gap-2">
+                ${THEME_ORDER.map((id) => {
+                  const t = THEMES[id];
+                  const active = state.settings.theme === id;
+                  return `
+                    <button type="button" data-drawer-theme="${id}" class="btn-drawer-theme-select flex items-center gap-2 rounded-lg border p-2 text-left text-xs" style="border-color: ${active ? theme.accent : theme.border}; background-color: ${active ? `${theme.accent}18` : 'transparent'};">
+                      <span class="size-4 rounded-full border" style="background-color: ${t.swatch}; border-color: ${theme.border};"></span>
+                      ${t.label}
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </section>
+
+            <!-- Custom Background -->
+            <section>
+              <p class="mb-3 text-xs font-semibold uppercase tracking-widest opacity-60">Theme customization</p>
+              <label class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm" style="border-color: ${theme.border};">
+                ${SVG.Upload}
+                <span class="flex-1">Upload custom background</span>
+                <input type="file" id="file-bg-upload" accept="image/*" class="sr-only" />
+              </label>
+              ${state.settings.customBackground ? `
+                <button type="button" id="btn-remove-bg" class="mt-2 text-xs underline opacity-70">Remove custom background</button>
+              ` : ''}
+              <label class="mt-5 block text-sm">
+                Dark overlay <span class="float-right tabular-nums opacity-60">${state.settings.customOverlay}%</span>
+                <input type="range" id="input-overlay" min="0" max="80" value="${state.settings.customOverlay}" class="mt-3 w-full accent-current" />
+              </label>
+            </section>
+
+            <!-- Typography -->
+            <section>
+              <p class="mb-3 text-xs font-semibold uppercase tracking-widest opacity-60">Typography</p>
+              <div class="flex items-center justify-between rounded-lg border p-3" style="border-color: ${theme.border};">
+                <span class="text-sm">Text size</span>
+                <div class="flex items-center gap-2">
+                  <button type="button" id="btn-drawer-font-dec" ${state.settings.fontSize <= FONT_MIN ? 'disabled' : ''} class="flex size-8 items-center justify-center rounded-full border disabled:opacity-30" style="border-color: ${theme.border};">
+                    ${SVG.Minus}
+                  </button>
+                  <span class="text-xs tabular-nums">${state.settings.fontSize}px</span>
+                  <button type="button" id="btn-drawer-font-inc" ${state.settings.fontSize >= FONT_MAX ? 'disabled' : ''} class="flex size-8 items-center justify-center rounded-full border disabled:opacity-30" style="border-color: ${theme.border};">
+                    ${SVG.Plus}
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <!-- Spacing -->
+            <section>
+              <p class="mb-3 text-xs font-semibold uppercase tracking-widest opacity-60">Reading behavior</p>
+              <div class="flex items-center gap-1 rounded-full border p-1" style="border-color: ${theme.border};">
+                ${['tight', 'normal', 'relaxed'].map((sId) => {
+                  const active = state.settings.spacing === sId;
+                  return `
+                    <button type="button" data-drawer-spacing="${sId}" class="btn-drawer-spacing-select flex-1 rounded-full py-1.5 text-center text-xs font-medium" style="background-color: ${active ? theme.chromeFg : 'transparent'}; color: ${active ? theme.chrome : theme.chromeFg};">
+                      ${SPACING[sId].label}
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </section>
+          </aside>
+        </div>
+      `;
+    }
+
+    function bindSettingsDrawerEvents(theme) {
+      const closeFn = () => {
+        state.settingsOpen = false;
+        render();
+      };
+
+      const btnBackdrop = document.getElementById('btn-close-drawer-backdrop');
+      if (btnBackdrop) btnBackdrop.addEventListener('click', closeFn);
+
+      const btnX = document.getElementById('btn-close-drawer-x');
+      if (btnX) btnX.addEventListener('click', closeFn);
+
+      document.querySelectorAll('.btn-drawer-theme-select').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          state.settings.theme = e.currentTarget.getAttribute('data-drawer-theme');
+          saveState();
+          render();
+        });
+      });
+
+      const bgUpload = document.getElementById('file-bg-upload');
+      if (bgUpload) {
+        bgUpload.addEventListener('change', (e) => {
+          const file = e.target.files?.[0];
+          if (!file || !file.type.startsWith('image/')) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            state.settings.customBackground = typeof reader.result === 'string' ? reader.result : null;
+            saveState();
+            render();
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const btnRemoveBg = document.getElementById('btn-remove-bg');
+      if (btnRemoveBg) {
+        btnRemoveBg.addEventListener('click', () => {
+          state.settings.customBackground = null;
+          saveState();
+          render();
+        });
+      }
+
+      const inputOverlay = document.getElementById('input-overlay');
+      if (inputOverlay) {
+        inputOverlay.addEventListener('input', (e) => {
+          state.settings.customOverlay = Number(e.target.value);
+          saveState();
+          render();
+        });
+      }
+
+      const btnDec = document.getElementById('btn-drawer-font-dec');
+      if (btnDec) {
+        btnDec.addEventListener('click', () => {
+          state.settings.fontSize = Math.max(FONT_MIN, state.settings.fontSize - 1);
+          saveState();
+          render();
+        });
+      }
+
+      const btnInc = document.getElementById('btn-drawer-font-inc');
+      if (btnInc) {
+        btnInc.addEventListener('click', () => {
+          state.settings.fontSize = Math.min(FONT_MAX, state.settings.fontSize + 1);
+          saveState();
+          render();
+        });
+      }
+
+      document.querySelectorAll('.btn-drawer-spacing-select').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          state.settings.spacing = e.currentTarget.getAttribute('data-drawer-spacing');
+          saveState();
+          render();
+        });
+      });
+    }
+
+    // --- GLOBAL SCROLL TRACKING ---
+    window.addEventListener('scroll', () => {
+      if (!state.isReading) return;
+      const doc = document.documentElement;
+      const max = doc.scrollHeight - window.innerHeight;
+      const y = window.scrollY;
+      state.progress = max > 0 ? Math.min(1, Math.max(0, y / max)) : 0;
+
+      const fill = document.getElementById('progress-bar-fill');
+      if (fill) {
+        fill.style.transform = `scaleX(${state.progress})`;
+      }
+
+      try {
+        localStorage.setItem('zenreader:scroll', String(Math.round(y)));
+      } catch {}
+    }, { passive: true });
+
+    // --- INITIALIZATION ---
+    loadState();
+    render();
+
+    if (state.isReading && state.initialScroll > 0) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, state.initialScroll);
+      });
+    }
+  </script>
+</body>
+</html>
